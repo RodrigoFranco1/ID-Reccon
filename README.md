@@ -34,10 +34,15 @@ Ideal para OSINT, Red Team, auditorías de exposición digital y análisis foren
 pip install -r requirements.txt
 ```
 ### Uso
+```bash
 - python google_dorker.py [opciones] <dominio o archivo>
+```
+```bash
 - python google_dorker.py dominios.txt -f -p 2 -s
+```
+```bash
 - El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
-
+```
 ---
 
 ## Opciones CLI
