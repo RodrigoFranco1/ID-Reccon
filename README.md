@@ -36,21 +36,21 @@ pip install -r requirements.txt
 ### Uso
 - python google_dorker.py [opciones] <dominio o archivo>
 - python google_dorker.py dominios.txt -f -p 2 -s
-El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
+- El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
 
 ---
 
 ## Opciones CLI
 
--f, --file	Indica que entrada es un archivo de texto
--e, --extensions	Extensiones separadas por coma (pdf,json,env)
--k, --keywords	Palabras clave separadas por coma (password,token)
--p, --pages	Número de páginas por extensión (default: 1)
--s, --subdomains	Buscar también en subdominios (site:*.dominio)
--a, --advanced	Usa operadores avanzados (intext:, intitle:, inurl:)
--w, --workers	Número de hilos paralelos (default: 5)
--o, --outdir	Carpeta donde guardar resultados (default: ./resultados)
---sleep	Pausa entre peticiones (default: 1.0 seg)
+- `-f`, `--file`: Indica que entrada es un archivo de texto
+- `-e`, `--extensions`: Extensiones separadas por coma (pdf,json,env)
+- `-k`, `--keywords`: Palabras clave separadas por coma (password,token)
+- `-p`, `--pages`: Número de páginas por extensión (default: 1)
+- `-s`, `--subdomains`: Buscar también en subdominios (site:*.dominio)
+- `-a`, `--advanced`: Usa operadores avanzados (intext:, intitle:, inurl:)
+- `-w`, `--workers`: Número de hilos paralelos (default: 5)
+- `-o`, `--outdir`: Carpeta donde guardar resultados (default: ./resultados)
+- `--sleep`: Pausa entre peticiones (default: 1.0 seg)
 
 ---
 
