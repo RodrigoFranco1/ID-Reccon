@@ -41,7 +41,6 @@ pip install -r requirements.txt
 - python google_dorker.py dominios.txt -f -p 2 -s
 ```
 - El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
----
 
 ### Uso recomendado en Kali Linux 
 - Kali Linux ya no permite modificar paquetes del Python base (/usr/lib/python3). Por eso se recomienda el uso de un entorno virtual para instalar los requerimientos.
