@@ -40,9 +40,7 @@ pip install -r requirements.txt
 ```bash
 - python google_dorker.py dominios.txt -f -p 2 -s
 ```
-```bash
 - El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
-```
 ---
 
 ## Opciones CLI
