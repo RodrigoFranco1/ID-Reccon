@@ -43,6 +43,22 @@ pip install -r requirements.txt
 - El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
 ---
 
+### Uso recomendado en Kali Linux 
+- Kali Linux ya no permite modificar paquetes del Python base (/usr/lib/python3). Por eso se recomienda el uso de un entorno virtual para instalar los requerimientos.
+
+```bash
+# Crear entorno virtual
+python3 -m venv ~/local
+
+# Activar entorno
+source ~/local/bin/activate
+
+# Instalar dependencias en entorno aislado
+pip install -r requirements.txt
+Esto asegura un entorno limpio, sin modificar el sistema base de Kali.
+```
+---
+
 ## Opciones CLI
 
 - `-f`, `--file`: Indica que entrada es un archivo de texto
