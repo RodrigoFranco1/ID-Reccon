@@ -1,0 +1,5 @@
+requests
+tenacity
+selenium
+webdriver-manager
+jinja2
