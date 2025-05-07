@@ -22,14 +22,45 @@ Ideal para OSINT, Red Team, auditorías de exposición digital y análisis foren
 
 ---
 
-## 🧪 Requisitos
+## Requisitos
 
 - Python 3.8 o superior
 - API Key válida de [SerpAPI](https://serpapi.com/)
 - Navegador Google Chrome instalado (para capturas)
 
-### 📦 Instalación de dependencias
+### Instalación de dependencias
 
 ```bash
 pip install -r requirements.txt
+```
+### Uso
+- python google_dorker.py [opciones] <dominio o archivo>
+- python google_dorker.py dominios.txt -f -p 2 -s
+El archivo dominios.txt debe tener un dominio por línea (sin http:// ni /).
+
+---
+
+## Opciones CLI
+
+-f, --file	Indica que entrada es un archivo de texto
+-e, --extensions	Extensiones separadas por coma (pdf,json,env)
+-k, --keywords	Palabras clave separadas por coma (password,token)
+-p, --pages	Número de páginas por extensión (default: 1)
+-s, --subdomains	Buscar también en subdominios (site:*.dominio)
+-a, --advanced	Usa operadores avanzados (intext:, intitle:, inurl:)
+-w, --workers	Número de hilos paralelos (default: 5)
+-o, --outdir	Carpeta donde guardar resultados (default: ./resultados)
+--sleep	Pausa entre peticiones (default: 1.0 seg)
+
+---
+
+## Archivos generados
+
+- resultados/dorking_results.json: resultados estructurados
+- resultados/dorking_links.txt: solo URLs
+- resultados/screenshots/*.png: capturas por resultado
+- resultados/dorking_report.html: informe visual navegable
+- resultados/dorking_errors.log: errores registrados
+
+
 
