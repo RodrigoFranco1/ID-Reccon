@@ -25,7 +25,7 @@ Ideal para OSINT, Red Team, auditorías de exposición digital y análisis foren
 ## Requisitos
 
 - Python 3.8 o superior
-- API Key válida de [SerpAPI](https://serpapi.com/)
+- API Key válida de [SerpAPI](https://serpapi.com/), (Puede ser la versióon gratuita).
 - Navegador Google Chrome instalado (para capturas)
 
 ### Instalación de dependencias
