@@ -74,7 +74,7 @@ python3 disclosure_hunter.py -i target.com -s -c credentials,api_secrets,config,
 
 ### Escaneo desde archivo con múltiples objetivos
 ```bash
-python3 disclosure_hunter.py -f targets.txt -s --min-score 5.0
+python3 disclosure_hunter.py -i targets.txt -f -s --min-score 5.0
 ```
 
 ### Escaneo agresivo para red team
