@@ -8,7 +8,7 @@ import hashlib
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 from urllib.parse import urlparse, urljoin
 
 import requests
@@ -139,19 +139,19 @@ class EnhancedConsole:
             print(f"  📁 Categories: {Colors.WHITE}{', '.join(categories)}{Colors.END}")
             print(f"  🔍 Extensions: {Colors.WHITE}{len(CRITICAL_EXTENSIONS)} critical file types{Colors.END}")
     
-    def print_query_info(self, query: str, extension: str, categoria: str):
+    def print_query_info(self, query: str, extension: Optional[str], categoria: str):
         """Print current query being executed"""
         if self.use_rich:
             self.console.print(f"[dim]🔍 Searching:[/] [yellow]{extension or 'general'}[/] [dim]|[/] [blue]{categoria}[/]")
         else:
             print(f"{Colors.YELLOW}🔍 Searching: {extension or 'general'} | {categoria}{Colors.END}")
     
-    def print_no_results(self, extension: str, page: int):
+    def print_no_results(self, extension: Optional[str], page: int):
         """Print no results message"""
         if self.use_rich:
-            self.console.print(f"[dim]  ❌ No results for {extension} on page {page}[/]")
+            self.console.print(f"[dim]  ❌ No results for {extension or 'general'} on page {page}[/]")
         else:
-            print(f"  ❌ No results for {extension} on page {page}")
+            print(f"  ❌ No results for {extension or 'general'} on page {page}")
     
     def print_finding(self, result: Dict[str, Any], index: int):
         """Print individual finding with enhanced formatting"""
@@ -247,7 +247,7 @@ class EnhancedConsole:
             self.current_task = 0
             self.total_tasks = total_tasks
     
-    def update_progress(self, description: str = None):
+    def update_progress(self, description: Optional[str] = None):
         """Update progress"""
         if self.use_rich and hasattr(self, 'progress'):
             if description:
@@ -330,32 +330,30 @@ def create_domain_directory(base_dir: Path, domain: str) -> Path:
     sanitized_domain = sanitize_domain_name(domain)
     domain_dir = base_dir / sanitized_domain
     
-    # Crear estructura de directorios
     domain_dir.mkdir(parents=True, exist_ok=True)
     (domain_dir / "screenshots").mkdir(exist_ok=True)
     (domain_dir / "downloaded_files").mkdir(exist_ok=True)
     
     return domain_dir
-    """Initialize logging with enhanced console output"""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    log_file = out_dir / "information_disclosure.log"
 
-    # Create custom formatter that doesn't interfere with rich output
+def init_enhanced_logging(out_dir: Path, domain: str, console: EnhancedConsole) -> Path:
+    """Inicializa el logging y estructura de directorios"""
+    domain_dir = create_domain_directory(out_dir, domain)
+
+    log_file = domain_dir / "information_disclosure.log"
     file_formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s")
     
-    # File handler
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(file_formatter)
-    
-    # Configure root logger
+
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.addHandler(file_handler)
-    
-    # Disable console handler to avoid interference with rich output
     logger.propagate = False
 
-def construir_query_avanzada(dominio: str, extension: str, categoria: str, *, subdomains=False) -> str:
+    return domain_dir
+
+def construir_query_avanzada(dominio: str, extension: Optional[str], categoria: str, *, subdomains=False) -> str:
     """Construye queries optimizadas para information disclosure"""
     site_part = f"site:*.{dominio}" if subdomains else f"site:{dominio}"
     
@@ -406,7 +404,7 @@ def analizar_contenido_sensible(url: str, content: str) -> Dict[str, Any]:
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=30),
        retry=retry_if_exception_type(requests.exceptions.RequestException) | retry_if_result(lambda r: r is None))
-def consultar_serpapi(api_key: str, query: str, start: int) -> Dict[str, Any] | None:
+def consultar_serpapi(api_key: str, query: str, start: int) -> Optional[Dict[str, Any]]:
     params = {"q": query, "api_key": api_key, "engine": "google", "num": 20, "start": start}
     resp = requests.get(API_URL, params=params, timeout=30)
     if resp.status_code == 429 or resp.headers.get("X-RateLimit-Remaining") == "0":
@@ -503,10 +501,13 @@ def google_dorking_enhanced(*, api_key: str, dominio: str, categoria: str, pages
             start = page * 20
             try:
                 data = consultar_serpapi(api_key, query, start)
+                if data is None:
+                    continue
+                    
                 organic = data.get("organic_results", [])
                 
                 if not organic:
-                    console.print_no_results(extension or "general", page + 1)
+                    console.print_no_results(extension, page + 1)
                     break
 
                 for r in organic:
@@ -543,7 +544,7 @@ def google_dorking_enhanced(*, api_key: str, dominio: str, categoria: str, pages
 
     return sorted(results, key=lambda x: x.get("sensitivity_score", 0), reverse=True)
 
-def generar_reporte_html(resultados: List[Dict[str, Any]], domain_dir: Path, domain: str) -> None:
+def generar_reporte_html(resultados: List[Dict[str, Any]], domain_dir: Path, domain: str) -> Path:
     """Genera reporte HTML para análisis visual en directorio específico del dominio"""
     html_content = f"""
     <!DOCTYPE html>
@@ -655,81 +656,21 @@ def generar_reporte_html(resultados: List[Dict[str, Any]], domain_dir: Path, dom
         f.write(html_content)
     
     return html_path
-    
-    # Add statistics
-    high_risk = [r for r in resultados if r.get("sensitivity_score", 0) >= 7]
-    medium_risk = [r for r in resultados if 4 <= r.get("sensitivity_score", 0) < 7]
-    low_risk = [r for r in resultados if r.get("sensitivity_score", 0) < 4]
-    
-    html_content += f"""
-        <div class="stats">
-            <div class="stat-card">
-                <h3 style="color: #f44336;">🔴 Critical</h3>
-                <h2>{len(high_risk)}</h2>
-                <p>High Risk Findings</p>
-            </div>
-            <div class="stat-card">
-                <h3 style="color: #ff9800;">🟡 Medium</h3>
-                <h2>{len(medium_risk)}</h2>
-                <p>Medium Risk Findings</p>
-            </div>
-            <div class="stat-card">
-                <h3 style="color: #4caf50;">🟢 Low</h3>
-                <h2>{len(low_risk)}</h2>
-                <p>Low Risk Findings</p>
-            </div>
-            <div class="stat-card">
-                <h3 style="color: #2196f3;">📊 Total</h3>
-                <h2>{len(resultados)}</h2>
-                <p>Total Results</p>
-            </div>
-        </div>
-    """
-    
-    for result in resultados:
-        score = result.get("sensitivity_score", 0)
-        risk_class = "high-risk" if score >= 7 else "medium-risk" if score >= 4 else "low-risk"
-        score_class = "high" if score >= 7 else "medium" if score >= 4 else "low"
-        
-        html_content += f"""
-        <div class="result-item {risk_class}">
-            <span class="score {score_class}">{score:.1f}/10</span>
-            <h3><a href="{result.get('link', '')}" target="_blank">{result.get('title', 'N/A')}</a></h3>
-            <p>{result.get('snippet', '')}</p>
-            <div class="details">
-                <strong>📁 Extension:</strong> {result.get('extension', 'N/A')}<br>
-                <strong>🏷️ Category:</strong> {result.get('categoria', 'N/A')}
-            </div>
-        """
-        
-        if result.get('screenshot'):
-            html_content += f'<img src="{result["screenshot"]}" class="screenshot" alt="Screenshot">'
-        
-        if result.get('content_analysis'):
-            analysis = result['content_analysis']
-            severity_color = "#f44336" if analysis.get('severity') == 'high' else "#ff9800" if analysis.get('severity') == 'medium' else "#4caf50"
-            html_content += f"""
-            <div class="content-analysis" style="background-color: {severity_color}20; padding: 10px; border-radius: 4px; margin-top: 10px;">
-                <strong style="color: {severity_color};">⚠️ Content Analysis:</strong> {analysis.get('severity', 'unknown').upper()} severity<br>
-                <strong>Details:</strong> {', '.join(analysis.get('details', []))}
-            </div>
-            """
-        
-        html_content += "</div>"
-    
-    html_content += """
-        </body>
-        </html>
-    """
-    
-    html_path = out_dir / "disclosure_report.html"
-    with open(html_path, 'w', encoding='utf-8') as f:
-        f.write(html_content)
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Information Disclosure Hunter - Enhanced Output Version")
-    parser.add_argument("-i", "--input", required=True, help="Dominio o archivo de dominios")
-    parser.add_argument("-f", "--file", action="store_true", help="Indica que el input es un archivo")
+    parser = argparse.ArgumentParser(
+        description="Information Disclosure Hunter - Enhanced Output Version",
+        epilog="""
+Ejemplos de uso:
+  %(prog)s -i target.com                    # Escanear un dominio
+  %(prog)s -i targets.txt -f               # Escanear desde archivo
+  %(prog)s -i target.com -s                # Incluir subdominios
+  %(prog)s -i targets.txt -f -s -p 3       # Escaneo completo desde archivo
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("-i", "--input", help="Dominio único o archivo de dominios")
+    parser.add_argument("-f", "--file", action="store_true", help="Indica que el input es un archivo de dominios")
     parser.add_argument("-c", "--categories", default="credentials,api_secrets,config,database", 
                        help="Categorías separadas por coma")
     parser.add_argument("-p", "--pages", type=int, default=2, help="Número de páginas por categoría")
@@ -741,6 +682,10 @@ def main() -> None:
     parser.add_argument("--no-banner", action="store_true", help="Ocultar banner de inicio")
     parser.add_argument("--simple-output", action="store_true", help="Usar output simple sin rich")
     args = parser.parse_args()
+
+    # Validar argumentos
+    if not args.input:
+        parser.error("Se requiere especificar el input:\n  Dominio único: -i target.com\n  Archivo: -i targets.txt -f")
 
     # Initialize enhanced console
     console = EnhancedConsole()
@@ -767,18 +712,42 @@ def main() -> None:
     categorias = [c.strip() for c in args.categories.split(",") if c.strip()]
     dominios = []
     
+    # Procesar input basado en si es archivo o dominio único
     if args.file:
         try:
-            with open(args.input, 'r') as f:
-                dominios = [line.strip() for line in f if line.strip()]
+            with open(args.input, 'r', encoding='utf-8') as f:
+                dominios = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+            
+            if not dominios:
+                if console.use_rich:
+                    console.console.print(f"[bold red]❌ Error: El archivo {args.input} está vacío o no contiene dominios válidos[/]")
+                else:
+                    print(f"{Colors.RED}❌ Error: El archivo {args.input} está vacío o no contiene dominios válidos{Colors.END}")
+                sys.exit(1)
+                
         except FileNotFoundError:
             if console.use_rich:
                 console.console.print(f"[bold red]❌ Error: No se pudo encontrar el archivo {args.input}[/]")
             else:
                 print(f"{Colors.RED}❌ Error: No se pudo encontrar el archivo {args.input}{Colors.END}")
             sys.exit(1)
+        except Exception as e:
+            if console.use_rich:
+                console.console.print(f"[bold red]❌ Error leyendo archivo {args.input}: {str(e)}[/]")
+            else:
+                print(f"{Colors.RED}❌ Error leyendo archivo {args.input}: {str(e)}{Colors.END}")
+            sys.exit(1)
     else:
+        # Dominio único
         dominios = [args.input]
+
+    # Validar que tenemos dominios para procesar
+    if not dominios:
+        if console.use_rich:
+            console.console.print("[bold red]❌ Error: No se especificaron dominios para procesar[/]")
+        else:
+            print(f"{Colors.RED}❌ Error: No se especificaron dominios para procesar{Colors.END}")
+        sys.exit(1)
 
     # Print scan configuration
     console.print_target_info(dominios, categorias)
@@ -894,16 +863,6 @@ def main() -> None:
             for dominio in dominios:
                 sanitized = sanitize_domain_name(dominio)
                 print(f"  🌐 {dominio}: {out_dir / sanitized}")
-        
-    else:
-        if console.use_rich:
-            console.console.print("[yellow]⚠️ No se encontraron resultados con information disclosure.[/]")
-        else:
-            print(f"{Colors.YELLOW}⚠️ No se encontraron resultados con information disclosure.{Colors.END}")Colors.END}")
-            print(f"  📄 JSON: {json_path}")
-            print(f"  🌐 HTML Report: {out_dir / 'disclosure_report.html'}")
-            print(f"  📸 Screenshots: {out_dir / 'screenshots'}")
-            print(f"  📥 Downloaded files: {out_dir / 'downloaded_files'}")
         
     else:
         if console.use_rich:
