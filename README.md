@@ -279,7 +279,7 @@ Este proyecto está bajo licencia MIT. Uso responsable únicamente.
 ---
 
 ## 🏆 Créditos
-
+F0r4j1do 💀
 Desarrollado para la comunidad de seguridad informática. Inspirado en técnicas de OSINT y metodologías de pentesting modernas.
 
 **⚠️ Disclaimer**: Esta herramienta está destinada únicamente para uso ético en pruebas de penetración autorizadas, bug bounty programs y auditorías de seguridad propias. El uso malintencionado está prohibido.
