@@ -1,5 +1,43 @@
-requests
-tenacity
-selenium
-webdriver-manager
-jinja2
+# Core dependencies for Information Disclosure Hunter
+# ================================================
+
+# HTTP requests and API communication
+requests>=2.31.0
+
+# Selenium for web automation and screenshots
+selenium>=4.15.0
+webdriver-manager>=4.0.1
+
+# Retry mechanisms and robust error handling
+tenacity>=8.2.3
+
+# Concurrent processing
+# (concurrent.futures is built-in since Python 3.2+)
+
+# Standard library modules used (no installation needed):
+# - argparse (built-in)
+# - json (built-in) 
+# - logging (built-in)
+# - os (built-in)
+# - sys (built-in)
+# - time (built-in)
+# - hashlib (built-in)
+# - re (built-in)
+# - pathlib (built-in)
+# - urllib.parse (built-in)
+# - typing (built-in since Python 3.5+)
+
+# Optional: Enhanced terminal output (uncomment if desired)
+# colorama>=0.4.6
+# rich>=13.6.0
+# tqdm>=4.66.0
+
+# Optional: Additional file format support (uncomment if needed)
+# python-docx>=0.8.11  # For .docx analysis
+# PyPDF2>=3.0.1        # For PDF content extraction
+# openpyxl>=3.1.2      # For Excel file analysis
+
+# Optional: Advanced content analysis (uncomment for enhanced detection)
+# beautifulsoup4>=4.12.2  # For HTML parsing
+# lxml>=4.9.3             # XML/HTML parser
+# python-magic>=0.4.27    # File type detection
