@@ -6,6 +6,7 @@ import sys
 import time
 import hashlib
 import re
+import itertools
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict, Any, Set, Optional
@@ -93,6 +94,46 @@ HIGH_PRIORITY_PATTERNS = [
 
 API_URL = "https://serpapi.com/search"
 
+def load_api_keys() -> itertools.cycle:
+    """Carga y valida múltiples API keys desde variable de entorno"""
+    # Primero intenta cargar múltiples keys
+    keys = os.getenv("SERPAPI_KEYS")
+    if keys:
+        key_list = [k.strip() for k in keys.split(",") if k.strip()]
+        if key_list:
+            return itertools.cycle(key_list)
+    
+    # Fallback: intenta cargar una sola key (compatibilidad)
+    single_key = os.getenv("SERPAPI_KEY")
+    if single_key:
+        return itertools.cycle([single_key.strip()])
+    
+    # Si no encuentra ninguna
+    raise RuntimeError("❌ No se encontró SERPAPI_KEYS (múltiples) ni SERPAPI_KEY (única)")
+
+def get_api_key_info(api_keys: itertools.cycle) -> Dict[str, Any]:
+    """Obtiene información sobre las API keys disponibles"""
+    # Crear una copia para inspeccionar sin afectar el ciclo original
+    keys_list = []
+    temp_cycle = itertools.cycle([])
+    
+    # Extraer las keys del ciclo (truco para obtener la lista)
+    first_key = next(api_keys)
+    keys_list.append(first_key)
+    
+    # Continuar hasta volver al primer key
+    current_key = next(api_keys)
+    while current_key != first_key:
+        keys_list.append(current_key)
+        current_key = next(api_keys)
+    
+    # Recrear el ciclo desde el primer key
+    return {
+        "total_keys": len(keys_list),
+        "keys_preview": [f"{key[:8]}***{key[-4:]}" for key in keys_list[:3]],
+        "cycle": itertools.cycle(keys_list)
+    }
+
 class EnhancedConsole:
     """Enhanced console output handler with fallback support"""
     
@@ -120,6 +161,24 @@ class EnhancedConsole:
 {Colors.YELLOW}Advanced Google Dorking for Pentesting & Red Team{Colors.END}
 {Colors.GREEN}Optimized for finding sensitive data exposure{Colors.END}
 {Colors.RED}{'='*80}{Colors.END}""")
+    
+    def print_api_keys_info(self, total_keys: int, keys_preview: List[str]):
+        """Print API keys information"""
+        if self.use_rich:
+            table = Table(title="🔑 API Keys Configuration", box=box.ROUNDED)
+            table.add_column("Parameter", style="cyan", no_wrap=True)
+            table.add_column("Value", style="white")
+            
+            table.add_row("🔑 Total Keys", str(total_keys))
+            table.add_row("🔄 Rotation", "Enabled" if total_keys > 1 else "Single key")
+            table.add_row("📋 Keys Preview", ", ".join(keys_preview))
+            
+            self.console.print(table)
+        else:
+            print(f"\n{Colors.CYAN}🔑 API Keys Configuration:{Colors.END}")
+            print(f"  🔑 Total Keys: {Colors.WHITE}{total_keys}{Colors.END}")
+            print(f"  🔄 Rotation: {Colors.WHITE}{'Enabled' if total_keys > 1 else 'Single key'}{Colors.END}")
+            print(f"  📋 Keys Preview: {Colors.WHITE}{', '.join(keys_preview)}{Colors.END}")
     
     def print_target_info(self, domains: List[str], categories: List[str]):
         """Print scan target information"""
@@ -403,16 +462,39 @@ def analizar_contenido_sensible(url: str, content: str) -> Dict[str, Any]:
     return findings
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=30),
-       retry=retry_if_exception_type(requests.exceptions.RequestException) | retry_if_result(lambda r: r is None))
-def consultar_serpapi(api_key: str, query: str, start: int) -> Optional[Dict[str, Any]]:
-    params = {"q": query, "api_key": api_key, "engine": "google", "num": 20, "start": start}
-    resp = requests.get(API_URL, params=params, timeout=30)
-    if resp.status_code == 429 or resp.headers.get("X-RateLimit-Remaining") == "0":
-        retry_after = int(resp.headers.get("Retry-After", "60"))
-        time.sleep(retry_after)
-        raise requests.exceptions.HTTPError("429 Too Many Requests")
-    resp.raise_for_status()
-    return resp.json()
+       retry=retry_if_exception_type(requests.exceptions.RequestException))
+def consultar_serpapi(api_keys: itertools.cycle, query: str, start: int) -> Optional[Dict[str, Any]]:
+    """Consulta SerpAPI con rotación automática de API keys"""
+    max_attempts = 5  # Máximo 5 intentos con diferentes keys
+    
+    for attempt in range(max_attempts):
+        api_key = next(api_keys)
+        
+        try:
+            params = {"q": query, "api_key": api_key, "engine": "google", "num": 20, "start": start}
+            resp = requests.get(API_URL, params=params, timeout=30)
+            
+            # Si hay rate limit, intenta con la siguiente key
+            if resp.status_code == 429 or resp.headers.get("X-RateLimit-Remaining") == "0":
+                retry_after = int(resp.headers.get("Retry-After", "60"))
+                if attempt < max_attempts - 1:  # No es el último intento
+                    time.sleep(min(retry_after, 10))  # Espera máximo 10 segundos
+                    continue
+                else:
+                    raise requests.exceptions.HTTPError("429 Too Many Requests - All keys exhausted")
+            
+            resp.raise_for_status()
+            return resp.json()
+            
+        except requests.exceptions.RequestException as e:
+            if attempt < max_attempts - 1:  # No es el último intento
+                time.sleep(1)  # Breve pausa antes del siguiente intento
+                continue
+            else:
+                # Si es el último intento, re-raise la excepción
+                raise e
+    
+    return None
 
 def descargar_y_analizar(url: str, domain_dir: Path) -> Dict[str, Any]:
     """Descarga archivo y analiza contenido sensible en directorio específico del dominio"""
@@ -484,14 +566,14 @@ def tomar_screenshot_avanzado(url: str, output_path: Path) -> bool:
         if driver:
             driver.quit()
 
-def google_dorking_enhanced(*, api_key: str, dominio: str, categoria: str, pages: int, subdomains: bool, sleep_between: float, domain_dir: Path, console: EnhancedConsole) -> List[Dict[str, Any]]:
+def google_dorking_enhanced(*, api_keys: itertools.cycle, dominio: str, categoria: str, pages: int, subdomains: bool, sleep_between: float, domain_dir: Path, console: EnhancedConsole) -> List[Dict[str, Any]]:
     """Version mejorada del dorking con output embellecido y directorio específico por dominio"""
     results = []
     links_seen: Set[str] = set()
     screenshots_dir = domain_dir / "screenshots"
     screenshots_dir.mkdir(parents=True, exist_ok=True)
     
-    extensions_to_try = CRITICAL_EXTENSIONS[:8] + [None]
+    extensions_to_try = CRITICAL_EXTENSIONS + [None]
     
     for extension in extensions_to_try:
         query = construir_query_avanzada(dominio, extension, categoria, subdomains=subdomains)
@@ -500,7 +582,7 @@ def google_dorking_enhanced(*, api_key: str, dominio: str, categoria: str, pages
         for page in range(pages):
             start = page * 20
             try:
-                data = consultar_serpapi(api_key, query, start)
+                data = consultar_serpapi(api_keys, query, start)
                 if data is None:
                     continue
                     
@@ -663,14 +745,21 @@ def main() -> None:
         epilog="""
 Ejemplos de uso:
   %(prog)s -i target.com                    # Escanear un dominio
-  %(prog)s -i targets.txt -f               # Escanear desde archivo
+  %(prog)s -f targets.txt                   # Escanear desde archivo (nueva sintaxis)
+  %(prog)s -i targets.txt --input-file      # Escanear desde archivo (sintaxis alternativa)
   %(prog)s -i target.com -s                # Incluir subdominios
-  %(prog)s -i targets.txt -f -s -p 3       # Escaneo completo desde archivo
+  %(prog)s -f targets.txt -s -p 3           # Escaneo completo desde archivo
+
+Variables de entorno:
+  SERPAPI_KEYS="key1,key2,key3"           # Múltiples API keys (recomendado)
+  SERPAPI_KEY="tu_key"                    # Una sola API key (fallback)
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("-i", "--input", help="Dominio único o archivo de dominios")
-    parser.add_argument("-f", "--file", action="store_true", help="Indica que el input es un archivo de dominios")
+    parser.add_argument("-f", "--file", metavar="FILENAME", help="Archivo de dominios (alternativa a -i)")
+    # Hacer que -i sea opcional si se usa -f
+    parser.add_argument("--input-file", action="store_true", help="Indica que el input (-i) es un archivo de dominios")
     parser.add_argument("-c", "--categories", default="credentials,api_secrets,config,database", 
                        help="Categorías separadas por coma")
     parser.add_argument("-p", "--pages", type=int, default=2, help="Número de páginas por categoría")
@@ -683,9 +772,17 @@ Ejemplos de uso:
     parser.add_argument("--simple-output", action="store_true", help="Usar output simple sin rich")
     args = parser.parse_args()
 
-    # Validar argumentos
-    if not args.input:
-        parser.error("Se requiere especificar el input:\n  Dominio único: -i target.com\n  Archivo: -i targets.txt -f")
+    # Validar argumentos - permitir tanto -i como -f
+    if not args.input and not args.file:
+        parser.error("Se requiere especificar el input:\n  Dominio único: -i target.com\n  Archivo: -f targets.txt o -i targets.txt --input-file")
+    
+    # Determinar la fuente de input
+    if args.file:
+        input_source = args.file
+        is_file = True
+    else:
+        input_source = args.input
+        is_file = args.input_file
 
     # Initialize enhanced console
     console = EnhancedConsole()
@@ -694,12 +791,23 @@ Ejemplos de uso:
     if args.simple_output:
         console.use_rich = False
 
-    api_key = os.getenv("SERPAPI_KEY")
-    if not api_key:
+    # Initialize API keys rotation
+    try:
+        api_key_info = get_api_key_info(load_api_keys())
+        api_keys = api_key_info["cycle"]
+        
+        # Show API keys information
+        console.print_api_keys_info(api_key_info["total_keys"], api_key_info["keys_preview"])
+        
+    except RuntimeError as e:
         if console.use_rich:
-            console.console.print("[bold red]❌ ERROR: No se encontró la variable de entorno SERPAPI_KEY.[/]")
+            console.console.print(f"[bold red]{e}[/]")
+            console.console.print("[yellow]💡 Configura múltiples keys:[/] [white]export SERPAPI_KEYS=\"key1,key2,key3\"[/]")
+            console.console.print("[yellow]💡 O una sola key:[/] [white]export SERPAPI_KEY=\"tu_key\"[/]")
         else:
-            print(f"{Colors.RED}❌ ERROR: No se encontró la variable de entorno SERPAPI_KEY.{Colors.END}")
+            print(f"{Colors.RED}{e}{Colors.END}")
+            print(f"{Colors.YELLOW}💡 Configura múltiples keys: {Colors.WHITE}export SERPAPI_KEYS=\"key1,key2,key3\"{Colors.END}")
+            print(f"{Colors.YELLOW}💡 O una sola key: {Colors.WHITE}export SERPAPI_KEY=\"tu_key\"{Colors.END}")
         sys.exit(1)
 
     # Print banner
@@ -713,33 +821,33 @@ Ejemplos de uso:
     dominios = []
     
     # Procesar input basado en si es archivo o dominio único
-    if args.file:
+    if is_file:
         try:
-            with open(args.input, 'r', encoding='utf-8') as f:
+            with open(input_source, 'r', encoding='utf-8') as f:
                 dominios = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
             
             if not dominios:
                 if console.use_rich:
-                    console.console.print(f"[bold red]❌ Error: El archivo {args.input} está vacío o no contiene dominios válidos[/]")
+                    console.console.print(f"[bold red]❌ Error: El archivo {input_source} está vacío o no contiene dominios válidos[/]")
                 else:
-                    print(f"{Colors.RED}❌ Error: El archivo {args.input} está vacío o no contiene dominios válidos{Colors.END}")
+                    print(f"{Colors.RED}❌ Error: El archivo {input_source} está vacío o no contiene dominios válidos{Colors.END}")
                 sys.exit(1)
                 
         except FileNotFoundError:
             if console.use_rich:
-                console.console.print(f"[bold red]❌ Error: No se pudo encontrar el archivo {args.input}[/]")
+                console.console.print(f"[bold red]❌ Error: No se pudo encontrar el archivo {input_source}[/]")
             else:
-                print(f"{Colors.RED}❌ Error: No se pudo encontrar el archivo {args.input}{Colors.END}")
+                print(f"{Colors.RED}❌ Error: No se pudo encontrar el archivo {input_source}{Colors.END}")
             sys.exit(1)
         except Exception as e:
             if console.use_rich:
-                console.console.print(f"[bold red]❌ Error leyendo archivo {args.input}: {str(e)}[/]")
+                console.console.print(f"[bold red]❌ Error leyendo archivo {input_source}: {str(e)}[/]")
             else:
-                print(f"{Colors.RED}❌ Error leyendo archivo {args.input}: {str(e)}{Colors.END}")
+                print(f"{Colors.RED}❌ Error leyendo archivo {input_source}: {str(e)}{Colors.END}")
             sys.exit(1)
     else:
         # Dominio único
-        dominios = [args.input]
+        dominios = [input_source]
 
     # Validar que tenemos dominios para procesar
     if not dominios:
@@ -774,7 +882,7 @@ Ejemplos de uso:
             for categoria in categorias:
                 future = executor.submit(
                     google_dorking_enhanced,
-                    api_key=api_key,
+                    api_keys=api_keys,
                     dominio=dominio,
                     categoria=categoria,
                     pages=args.pages,
