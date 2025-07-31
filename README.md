@@ -54,8 +54,12 @@ source ~/pentest-env/bin/activate
 # Instalar dependencias
 pip install -r requirements.txt
 
-# Configurar API key
-export SERPAPI_KEY="tu_api_key"
+# Configurar API keys
+# Método recomendado - Múltiples keys
+export SERPAPI_KEYS="key1_aqui,key2_aqui,key3_aqui"
+
+# Método de respaldo - Una sola key
+export SERPAPI_KEY="tu_key_unica"
 ```
 
 ---
